@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  virtuoso:
+    container_name: aopwiki-virtuoso
+    image: openlink/virtuoso-opensource-7
+    restart: unless-stopped
+    ports:
+      - "8890:8890"   # SPARQL endpoint
+      - "1111:1111"   # isql access
+    environment:
+      DBA_PASSWORD: dba
+      VIRT_Parameters_DirsAllowed: "., ../vad, /usr/share/proj, /database/data"
+    volumes:
+      - ./aopwikirdf:/database/data

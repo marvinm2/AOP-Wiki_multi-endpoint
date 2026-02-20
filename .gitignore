@@ -1,0 +1,23 @@
+# Generated data
+versions/
+aopwikirdf/*.ttl
+aopwikirdf/load.log
+
+# Logs
+*.log
+
+# Generated images
+*.png
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# AI/Claude related
+CLAUDE.md
+CODE_REVIEW.md
+.claude/
+.planning/
