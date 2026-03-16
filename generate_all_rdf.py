@@ -94,9 +94,14 @@ def _parse_local_gz(gz_path: str, version_date: str, config, context: dict) -> N
 
 
 def _check_bridgedb(bridgedb_url: str, timeout: int = 10) -> bool:
-    """Return True if BridgeDb endpoint is reachable, False otherwise."""
+    """Return True if BridgeDb endpoint is reachable, False otherwise.
+
+    Probes the /properties sub-endpoint (used by _stage_write_void_rdf) rather
+    than the bare base URL, which returns 404 on the public BridgeDb service.
+    """
+    probe_url = bridgedb_url.rstrip("/") + "/properties"
     try:
-        resp = requests.get(bridgedb_url, timeout=timeout)
+        resp = requests.get(probe_url, timeout=timeout)
         resp.raise_for_status()
         return True
     except requests.RequestException:
@@ -256,6 +261,31 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _ensure_prefixes_symlink() -> None:
+    """Ensure prefixes.csv is resolvable from the current working directory.
+
+    The upstream _stage_write_aop_rdf hardcodes the relative path "prefixes.csv"
+    (pipeline.py line 282).  In this project the actual file is at data/prefixes.csv.
+    This function creates a symlink `prefixes.csv -> data/prefixes.csv` in CWD if
+    neither a symlink nor a file named prefixes.csv already exists there.
+    """
+    target = Path("prefixes.csv")
+    source = Path("data/prefixes.csv")
+    if target.exists() or target.is_symlink():
+        return
+    if not source.exists():
+        logger.warning(
+            "data/prefixes.csv not found — _stage_write_aop_rdf may fail. "
+            "Run from the Setup directory."
+        )
+        return
+    try:
+        target.symlink_to(source)
+        logger.info("Created symlink prefixes.csv -> data/prefixes.csv")
+    except OSError as exc:
+        logger.warning("Could not create prefixes.csv symlink: %s", exc)
+
+
 def _setup_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -272,6 +302,12 @@ def main() -> None:
 
     # Resolve BridgeDb URL: CLI flag > PipelineConfig default.
     bridgedb_url = args.bridgedb_url or PipelineConfig.bridgedb_url
+
+    # Ensure prefixes.csv is accessible from CWD.
+    # The upstream _stage_write_aop_rdf hardcodes "prefixes.csv" as a CWD-relative
+    # path.  The actual file lives at data/prefixes.csv.  Create a symlink so
+    # both paths work when the script is run from the Setup directory.
+    _ensure_prefixes_symlink()
 
     # Discover all available versions.
     all_gz = find_all_gz_files(VERSIONS_DIR)
