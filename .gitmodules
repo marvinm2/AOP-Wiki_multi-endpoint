@@ -1,0 +1,3 @@
+[submodule "aopwiki-rdf"]
+	path = aopwiki-rdf
+	url = https://github.com/marvinm2/aopwikirdf.git
