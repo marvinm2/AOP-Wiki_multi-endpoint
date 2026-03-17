@@ -21,6 +21,9 @@ prefixes.csv
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
+# Environment
+.env
+
 # AI/Claude related
 CLAUDE.md
 CODE_REVIEW.md
