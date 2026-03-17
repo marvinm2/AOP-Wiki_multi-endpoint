@@ -6,10 +6,24 @@ services:
     image: openlink/virtuoso-opensource-7
     restart: unless-stopped
     ports:
-      - "8890:8890"   # SPARQL endpoint
-      - "1111:1111"   # isql access
+      - "8890:8890"           # SPARQL endpoint (public read-only)
+      - "127.0.0.1:1111:1111" # isql access (localhost only)
     environment:
-      DBA_PASSWORD: dba
+      DBA_PASSWORD: ${DBA_PASSWORD}
       VIRT_Parameters_DirsAllowed: "., ../vad, /usr/share/proj, /database/data"
+    # Memory limits applied at service level (deploy.resources is silently ignored by
+    # Docker Compose v5 without --compatibility flag).
+    # Operators tuning Virtuoso within this budget: adjust NumberOfBuffers and
+    # MaxDirtyBuffers in virtuoso.ini — see https://docs.openlinksw.com/virtuoso/rdfperfgeneral/
+    mem_limit: 4g
+    mem_reservation: 2g
+    healthcheck:
+      # wget is available in openlink/virtuoso-opensource-7; curl is not
+      test: ["CMD", "wget", "-q", "--spider",
+             "http://localhost:8890/sparql?query=ASK+%7B%7D&format=application%2Fsparql-results%2Bjson"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     volumes:
       - ./aopwikirdf:/database/data
