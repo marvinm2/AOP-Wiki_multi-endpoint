@@ -19,6 +19,7 @@ from xml.etree.ElementTree import parse as et_parse
 
 import requests
 
+from validate_rdf import validate_version_dir
 from aopwiki_rdf.config import PipelineConfig
 from aopwiki_rdf.parser.xml_parser import parse_aopwiki_xml, AOPXML_NS
 from aopwiki_rdf.pipeline import (
@@ -48,12 +49,13 @@ _DEFAULT_TO_VERSIONED_TEMPLATE = [
 @dataclasses.dataclass
 class VersionResult:
     version: str
-    status: str          # "PASS" | "FAIL" | "SKIP"
+    status: str          # "PASS" | "FAIL" | "SKIP" | "INVALID"
     duration: float      # seconds
     aop_count: int = 0
     ke_count: int = 0
     ker_count: int = 0
     stressor_count: int = 0
+    triple_count: int = 0   # sum of triples across all 4 TTL files
     error: Optional[str] = None
 
 
@@ -169,9 +171,35 @@ def process_version(gz_path: str, version: str, config: PipelineConfig, force: b
         _stage_write_enriched_rdf(config, context)
         _stage_write_genes_rdf(config, context)
         _stage_write_void_rdf(config, context)
-        _atomic_rename_outputs(version_dir, version)
 
+        # --- Validation gate (PIPE-05, PIPE-06) ---
         entities = context["entities"]
+        val = validate_version_dir(
+            version_dir=version_dir,
+            aop_count=len(entities.aopdict),
+            ke_count=len(entities.kedict),
+            ker_count=len(entities.kerdict),
+            stressor_count=len(entities.stressordict),
+        )
+        if not val.valid:
+            _cleanup_default_outputs(version_dir)
+            errors = "; ".join(
+                [fr.error for fr in val.file_results if fr.error]
+                + ([val.entity_error] if val.entity_error else [])
+            )
+            return VersionResult(
+                version=version,
+                status="INVALID",
+                duration=time.time() - t0,
+                aop_count=len(entities.aopdict),
+                ke_count=len(entities.kedict),
+                ker_count=len(entities.kerdict),
+                stressor_count=len(entities.stressordict),
+                triple_count=val.total_triples,
+                error=errors,
+            )
+
+        _atomic_rename_outputs(version_dir, version)
         return VersionResult(
             version=version,
             status="PASS",
@@ -180,6 +208,7 @@ def process_version(gz_path: str, version: str, config: PipelineConfig, force: b
             ke_count=len(entities.kedict),
             ker_count=len(entities.kerdict),
             stressor_count=len(entities.stressordict),
+            triple_count=val.total_triples,
         )
     except Exception as exc:
         _cleanup_default_outputs(version_dir)
@@ -196,30 +225,37 @@ def _print_summary(results: list) -> None:
     passed  = sum(1 for r in results if r.status == "PASS")
     failed  = sum(1 for r in results if r.status == "FAIL")
     skipped = sum(1 for r in results if r.status == "SKIP")
+    invalid = sum(1 for r in results if r.status == "INVALID")
     total_secs = sum(r.duration for r in results)
 
     logger.info("")
-    logger.info("%-14s %-6s %-10s %5s %5s %5s %9s",
-                "Version", "Status", "Duration", "AOPs", "KEs", "KERs", "Stressors")
-    logger.info("-" * 62)
+    logger.info("%-14s %-8s %-10s %5s %5s %5s %9s %9s",
+                "Version", "Status", "Duration", "AOPs", "KEs", "KERs", "Stressors", "Triples")
+    logger.info("-" * 72)
     for r in results:
         if r.status == "SKIP":
-            logger.info("%-14s %-6s %-10s %5s %5s %5s %9s",
-                        r.version, r.status, f"{r.duration:.1f}s", "-", "-", "-", "-")
+            logger.info("%-14s %-8s %-10s %5s %5s %5s %9s %9s",
+                        r.version, r.status, f"{r.duration:.1f}s", "-", "-", "-", "-", "-")
         elif r.status == "FAIL":
-            logger.info("%-14s %-6s %-10s  ERROR: %s",
+            logger.info("%-14s %-8s %-10s  ERROR: %s",
                         r.version, r.status, f"{r.duration:.1f}s", r.error or "unknown")
-        else:
-            logger.info("%-14s %-6s %-10s %5d %5d %5d %9d",
+        elif r.status == "INVALID":
+            logger.info("%-14s %-8s %-10s %5d %5d %5d %9d %9d  INVALID: %s",
                         r.version, r.status, f"{r.duration:.1f}s",
-                        r.aop_count, r.ke_count, r.ker_count, r.stressor_count)
+                        r.aop_count, r.ke_count, r.ker_count, r.stressor_count,
+                        r.triple_count, r.error or "unknown")
+        else:
+            logger.info("%-14s %-8s %-10s %5d %5d %5d %9d %9d",
+                        r.version, r.status, f"{r.duration:.1f}s",
+                        r.aop_count, r.ke_count, r.ker_count, r.stressor_count,
+                        r.triple_count)
 
     logger.info("")
     h, remainder = divmod(int(total_secs), 3600)
     m, s = divmod(remainder, 60)
     logger.info(
-        "%d/%d passed, %d failed, %d skipped | Total: %dh%02dm%02ds",
-        passed, len(results), failed, skipped, h, m, s,
+        "%d/%d passed, %d failed, %d invalid, %d skipped | Total: %dh%02dm%02ds",
+        passed, len(results), failed, invalid, skipped, h, m, s,
     )
 
 
@@ -365,6 +401,11 @@ def main() -> None:
             logger.info("[%02d/%02d] %s PASS (%.1fs)", idx, total, version, result.duration)
         elif result.status == "SKIP":
             logger.info("[%02d/%02d] %s SKIP (all 4 TTL files exist)", idx, total, version)
+        elif result.status == "INVALID":
+            logger.error(
+                "[%02d/%02d] %s INVALID (%.1fs): %s",
+                idx, total, version, result.duration, result.error,
+            )
         else:
             logger.error(
                 "[%02d/%02d] %s FAIL (%.1fs): %s",
@@ -373,7 +414,7 @@ def main() -> None:
 
     _print_summary(results)
 
-    failed = [r for r in results if r.status == "FAIL"]
+    failed = [r for r in results if r.status in ("FAIL", "INVALID")]
     sys.exit(1 if failed else 0)
 
 
