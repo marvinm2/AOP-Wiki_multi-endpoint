@@ -82,7 +82,7 @@ def _parse_local_gz(gz_path: str, version_date: str, config, context: dict) -> N
             shutil.copyfileobj(f_in, tmp)
 
     try:
-        entities = parse_aopwiki_xml(tmp_xml_path, config=None, version_date=version_date)
+        entities = parse_aopwiki_xml(tmp_xml_path, config=None)
         tree = et_parse(tmp_xml_path)
         xml_root = tree.getroot()
     finally:
