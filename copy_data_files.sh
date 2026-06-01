@@ -22,3 +22,10 @@ find "$SOURCE_DIR" -type f \( \
 done
 
 echo "[✓] All .ttl files copied to: $TARGET_DIR"
+
+# Regenerate the version catalogue + SPARQL service description so they reflect
+# the versions now present (load.sh loads them into a metadata graph).
+echo "[→] Generating version catalogue + service description"
+python3 "$(dirname "$0")/generate_catalog.py" --out "$TARGET_DIR" \
+    && echo "[✓] Catalogue + service description written to: $TARGET_DIR" \
+    || echo "[!] Catalogue generation skipped (generate_catalog.py failed)"

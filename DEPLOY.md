@@ -17,7 +17,8 @@ data is always a deliberate manual step. CI never writes to it.
 | `add_version.py` | One quarter: download → convert → validate → stats diff |
 | `generate_all_rdf.py` | Batch convert all versions (`aopwiki-rdf` submodule pipeline) |
 | `validate_rdf.py` | TTL syntax + entity-count gate |
-| `load.sh` | Load TTLs into Virtuoso named graphs |
+| `generate_catalog.py` | Emit the DCAT version catalogue + SPARQL service description |
+| `load.sh` | Load TTLs into Virtuoso named graphs (+ catalogue/SD into a metadata graph) |
 | `.github/workflows/quarterly-update.yml` | Detects a new quarter, opens a PR |
 | `.github/workflows/rdf-validation.yml` | Guards the validator (fixtures) |
 | `.github/workflows/endpoint-health.yml` | Daily live-endpoint health check |
@@ -89,6 +90,19 @@ python setup_versions.py     # download all snapshots in versions.txt
 python generate_all_rdf.py   # convert all → versions/<date>/*.ttl
 docker compose up -d          # local Virtuoso (8890 SPARQL, 1111 isql localhost)
 ./load.sh                     # incremental load into dated graphs
+```
+
+`copy_data_files.sh` regenerates the version catalogue + service description, and
+`load.sh` loads them into the metadata graph
+`http://aopwiki-multirdf.vhp4safety.nl/metadata`. This makes the version series
+machine-discoverable (DCAT `dcat:version`/`dcat:previousVersion` chain,
+`owl:versionInfo`) and gives the endpoint a SPARQL 1.1 Service Description
+listing every named graph. Query them with:
+
+```sparql
+# list all versions, newest first
+SELECT ?v WHERE { GRAPH <http://aopwiki-multirdf.vhp4safety.nl/metadata> {
+  ?d <http://www.w3.org/2002/07/owl#versionInfo> ?v } } ORDER BY DESC(?v)
 ```
 
 Conversion logic lives in the `aopwiki-rdf` submodule (`Setup/aopwiki-rdf/`), not
