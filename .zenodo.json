@@ -1,0 +1,27 @@
+{
+  "upload_type": "software",
+  "title": "AOP-Wiki multi-version RDF endpoint (data pipeline)",
+  "description": "<p>Pipeline that builds a versioned RDF representation of the AOP-Wiki: it downloads every quarterly AOP-Wiki XML release (<a href=\"https://aopwiki.org/downloads\">aopwiki.org/downloads</a>), converts each to RDF/Turtle, validates it, and loads it into a single Virtuoso SPARQL endpoint as one named graph per release (<code>http://aopwiki.org/graph/YYYY-MM-DD</code>). Live endpoint: <a href=\"https://aopwiki-multirdf.vhp4safety.nl/sparql\">aopwiki-multirdf.vhp4safety.nl/sparql</a>. The conversion method is described in <a href=\"https://doi.org/10.1089/aivt.2021.0010\">doi.org/10.1089/aivt.2021.0010</a>; the generated dataset is archived at <a href=\"https://doi.org/10.5281/zenodo.13353286\">10.5281/zenodo.13353286</a>.</p>",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {"name": "Martens, Marvin", "affiliation": "Department of Translational Genomics, Maastricht University, Maastricht, the Netherlands", "orcid": "0000-0003-2230-0840"},
+    {"name": "Willighagen, Egon", "affiliation": "Department of Bioinformatics (BiGCaT), NUTRIM, Maastricht University, Maastricht, the Netherlands", "orcid": "0000-0001-7542-0286"}
+  ],
+  "keywords": [
+    "adverse outcome pathway", "AOP-Wiki", "RDF", "SPARQL", "Virtuoso",
+    "semantic web", "toxicology", "FAIR", "versioning"
+  ],
+  "related_identifiers": [
+    {"identifier": "10.1089/aivt.2021.0010", "relation": "isDocumentedBy", "resource_type": "publication-article", "scheme": "doi"},
+    {"identifier": "10.5281/zenodo.13353286", "relation": "isSupplementTo", "scheme": "doi"}
+  ],
+  "grants": [
+    {"id": "10.13039/501100000780::814572"},
+    {"id": "10.13039/501100000780::681002"},
+    {"id": "10.13039/501100000780::814425"},
+    {"id": "10.13039/501100000780::731075"},
+    {"id": "10.13039/501100003246::36952"}
+  ],
+  "notes": "Funded by the European Union's Horizon 2020 (EU 2020) research and innovation program under grant agreement no. 681002 (EU-ToxRisk), no. 814572 (NanoSolveIT), no. 814425 (RiskGONE), EINFRA-22-2016 under no. 731075 (OpenRiskNet), and VHP4Safety, funded by the Netherlands Research Council (NWO) 'Netherlands Research Agenda: Research on Routes by Consortia' (NWA-ORC 1292.19.272)."
+}
