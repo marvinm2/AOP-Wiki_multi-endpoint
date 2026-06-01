@@ -1,0 +1,46 @@
+name: endpoint-health
+
+# Daily liveness + sanity check of the live multi-version SPARQL endpoint, so a
+# silent production regression (endpoint down, graphs dropped, reload gone wrong)
+# is surfaced even when nobody is looking. Opens an issue on scheduled failure.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # 07:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    env:
+      ENDPOINT: https://aopwiki-multirdf.vhp4safety.nl/sparql
+      MIN_GRAPHS: '30'  # floor; ~33 quarterly snapshots are loaded today
+    steps:
+      - name: Count named graphs
+        run: |
+          set -euo pipefail
+          QUERY='SELECT (COUNT(DISTINCT ?g) AS ?n) WHERE { GRAPH ?g { ?s ?p ?o } FILTER(STRSTARTS(STR(?g), "http://aopwiki.org/graph/")) }'
+          resp=$(curl -sS -m 60 --get "$ENDPOINT" \
+            --data-urlencode "query=$QUERY" \
+            -H "Accept: application/sparql-results+json")
+          echo "Response: $resp"
+          count=$(echo "$resp" | jq -r '.results.bindings[0].n.value // "0"')
+          echo "Named graphs: $count (floor: $MIN_GRAPHS)"
+          if ! [ "$count" -ge "$MIN_GRAPHS" ] 2>/dev/null; then
+            echo "::error::Endpoint unhealthy: $count graphs (< $MIN_GRAPHS) or unreachable"
+            exit 1
+          fi
+          echo "OK"
+
+      - name: Open issue on scheduled failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "SPARQL endpoint health check failed on $(date -I)" \
+            --body "The multi-version SPARQL endpoint health check failed: graph count below ${MIN_GRAPHS}, or the endpoint was unreachable. Inspect: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

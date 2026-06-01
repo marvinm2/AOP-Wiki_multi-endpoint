@@ -1,0 +1,7 @@
+# Deliberately malformed Turtle: missing the ';'/'.' terminators between
+# predicate-object pairs. validate_rdf.py must reject this (non-zero exit).
+@prefix ex: <http://example.org/> .
+
+ex:thing a ex:Type
+    ex:name "no terminator before this predicate"
+    ex:dangling "and the statement is never closed"

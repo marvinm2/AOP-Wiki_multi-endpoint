@@ -1,0 +1,44 @@
+name: rdf-validation
+
+# QC gate for the TTL validator. Generated TTL files and version snapshots are
+# gitignored (not committed), so this does not validate live data on PRs — it
+# guards the validator itself: it must accept well-formed Turtle and reject
+# malformed Turtle. Runs when the validator, its fixtures, or this workflow
+# change, and on manual dispatch.
+
+on:
+  pull_request:
+    paths:
+      - 'validate_rdf.py'
+      - 'tests/fixtures/**'
+      - '.github/workflows/rdf-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install validator dependency
+        run: python -m pip install --upgrade pip rdflib
+
+      - name: Import smoke test
+        run: python -c "import validate_rdf; print('validate_rdf imports OK')"
+
+      - name: Accept valid TTL (expect exit 0)
+        run: python validate_rdf.py tests/fixtures/valid.ttl
+
+      - name: Reject malformed TTL (expect non-zero)
+        run: |
+          if python validate_rdf.py tests/fixtures/invalid.ttl; then
+            echo "::error::validator accepted malformed TTL"; exit 1
+          fi
+          echo "validator correctly rejected malformed TTL"
