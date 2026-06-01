@@ -1,0 +1,118 @@
+name: quarterly-update
+
+# Semi-automated quarterly update. Detects a newly-published AOP-Wiki quarter,
+# converts + validates it, and opens a PR that adds the date to versions.txt with
+# the stats diff and the manual deploy runbook in the body. marvinm2 is requested
+# as reviewer, so GitHub's native PR-opened email delivers the runbook.
+#
+# This workflow NEVER touches the live SPARQL endpoint. Loading the new TTLs onto
+# the cluster stays a deliberate manual step (see DEPLOY.md), executed after the
+# PR is reviewed and merged.
+
+on:
+  schedule:
+    - cron: '0 8 * * MON'  # Mondays 08:00 UTC — picks up a quarter within days of release
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  quarterly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout (with submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Detect new quarter
+        id: detect
+        run: |
+          set -euo pipefail
+          # Only setup_versions (stdlib + requests) is needed to detect.
+          python -m pip install --upgrade pip requests
+          NEXT=$(python add_version.py --detect)
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          if [ -z "$NEXT" ]; then
+            echo "No new quarter to add."
+          else
+            echo "New quarter detected: $NEXT"
+          fi
+
+      - name: Install full converter
+        if: steps.detect.outputs.next != ''
+        run: |
+          python -m pip install -r requirements.txt
+
+      - name: Convert + validate + stats diff
+        if: steps.detect.outputs.next != ''
+        env:
+          AOPWIKI_VERIFY_SSL: 'true'
+        run: |
+          python add_version.py "${{ steps.detect.outputs.next }}" \
+            --bridgedb-url https://webservice.bridgedb.org/Human \
+            --stats-out stats.md
+
+      - name: Upload generated TTL artifacts
+        if: steps.detect.outputs.next != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aopwikirdf-${{ steps.detect.outputs.next }}
+          path: versions/${{ steps.detect.outputs.next }}/*.ttl
+          retention-days: 30
+
+      - name: Open PR
+        if: steps.detect.outputs.next != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT: ${{ steps.detect.outputs.next }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="quarterly/${NEXT}"
+          git checkout -b "$BRANCH"
+          # Add the new quarter to versions.txt (the committed source of truth).
+          if ! grep -qx "$NEXT" versions.txt; then
+            printf '%s\n' "$NEXT" >> versions.txt
+          fi
+          git add versions.txt
+          git commit -m "data(${NEXT}): register ${NEXT} quarterly AOP-Wiki snapshot"
+          git push origin "$BRANCH"
+
+          {
+            cat stats.md
+            echo ""
+            echo "---"
+            echo "## Manual deploy runbook (do NOT merge until reviewed)"
+            echo ""
+            echo "The TTL files are attached to this workflow run as an artifact"
+            echo "(\`aopwikirdf-${NEXT}\`). Loading them onto the live endpoint is a"
+            echo "manual step — this PR only registers the version. After merging:"
+            echo ""
+            echo '```bash'
+            echo "ssh tgx1"
+            echo "cd ~/aopwiki-dashboard            # stack.yml deploys virtuoso + dashboard"
+            echo "# place the new TTLs under the virtuoso data mount, then:"
+            echo "./load.sh --incremental           # loads only the new dated graph"
+            echo "docker service update --force aopwiki-dashboard_virtuoso"
+            echo '```'
+            echo ""
+            echo "See DEPLOY.md for the full procedure and verification queries."
+          } > pr_body.md
+
+          gh pr create \
+            --base master \
+            --head "$BRANCH" \
+            --title "Add AOP-Wiki RDF quarter ${NEXT}" \
+            --body-file pr_body.md \
+            --reviewer marvinm2
