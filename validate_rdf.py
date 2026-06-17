@@ -42,6 +42,8 @@ _STAGE_FILES = [
     "AOPWikiRDF-Genes.ttl",
     "AOPWikiRDF-Void.ttl",
 ]
+# Enriched was added later; older versions don't have it.
+_OPTIONAL_STAGE_FILES = {"AOPWikiRDF-Enriched.ttl"}
 _MAIN_FILE = "AOPWikiRDF.ttl"
 
 
@@ -169,6 +171,18 @@ def _resolve_ttl_path(version_dir: Path, stage_name: str) -> Optional[Path]:
     # e.g. "AOPWikiRDF-Enriched.ttl" -> "AOPWikiRDF-Enriched-*.ttl"
     base = stage_name.removesuffix(".ttl")
     matches = list(version_dir.glob(f"{base}-*.ttl"))
+
+    # For the main file, exclude -Enriched, -Genes, -Void variants that also
+    # match the broad "AOPWikiRDF-*.ttl" glob.
+    if stage_name == _MAIN_FILE:
+        matches = [
+            p for p in matches
+            if not any(
+                p.name.startswith(prefix)
+                for prefix in ("AOPWikiRDF-Enriched-", "AOPWikiRDF-Genes-", "AOPWikiRDF-Void-")
+            )
+        ]
+
     return matches[0] if len(matches) == 1 else None
 
 
@@ -208,6 +222,9 @@ def validate_version_dir(
     for stage_name in _STAGE_FILES:
         resolved = _resolve_ttl_path(version_dir, stage_name)
         if resolved is None:
+            if stage_name in _OPTIONAL_STAGE_FILES:
+                logger.debug("Optional file %s not found in %s — skipping", stage_name, version_dir)
+                continue
             file_results.append(TtlValidationResult(
                 path=version_dir / stage_name,
                 valid=False,
