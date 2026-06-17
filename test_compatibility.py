@@ -106,7 +106,7 @@ def test_version(gz_path: Path, version_date: str) -> dict:
             with open(tmp_path, "wb") as f_out:
                 f_out.write(f_in.read())
 
-        entities = parse_aopwiki_xml(tmp_path, config=None, version_date=version_date)
+        entities = parse_aopwiki_xml(tmp_path, config=None)
         counts = {
             "AOPs":      len(entities.aopdict),
             "KEs":       len(entities.kedict),
