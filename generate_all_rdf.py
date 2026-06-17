@@ -37,6 +37,11 @@ logger = logging.getLogger(__name__)
 
 VERSIONS_DIR = "versions"
 
+# The versioned multi-endpoint serves this data, so per-version VoID must
+# advertise it rather than the converter's production (BigCaT) default.
+# Keep in sync with ENDPOINT in generate_catalog.py.
+MULTIENDPOINT_SPARQL = "https://aopwiki-multirdf.vhp4safety.nl/sparql"
+
 # Maps stage-default output filenames to the versioned naming convention.
 _DEFAULT_TO_VERSIONED_TEMPLATE = [
     ("AOPWikiRDF.ttl",          "AOPWikiRDF-{version}.ttl"),
@@ -392,6 +397,7 @@ def main() -> None:
             bridgedb_url=bridgedb_url,
             request_timeout=30,
             log_level="WARNING",
+            sparql_endpoint=MULTIENDPOINT_SPARQL,
         )
 
         result = process_version(gz_path, version, config, args.force)
