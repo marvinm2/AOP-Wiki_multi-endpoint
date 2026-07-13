@@ -59,7 +59,7 @@ jobs:
           AOPWIKI_VERIFY_SSL: 'true'
         run: |
           python add_version.py "${{ steps.detect.outputs.next }}" \
-            --bridgedb-url https://webservice.bridgedb.org/Human \
+            --bridgedb-url https://webservice.bridgedb.org/Human/ \
             --stats-out stats.md
 
       - name: Upload generated TTL artifacts
