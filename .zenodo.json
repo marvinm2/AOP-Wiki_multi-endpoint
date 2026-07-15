@@ -6,7 +6,7 @@
   "access_right": "open",
   "creators": [
     {"name": "Martens, Marvin", "affiliation": "Department of Translational Genomics, Maastricht University, Maastricht, the Netherlands", "orcid": "0000-0003-2230-0840"},
-    {"name": "Willighagen, Egon", "affiliation": "Department of Bioinformatics (BiGCaT), NUTRIM, Maastricht University, Maastricht, the Netherlands", "orcid": "0000-0001-7542-0286"}
+    {"name": "Willighagen, Egon", "affiliation": "Department of Translational Genomics, Maastricht University, Maastricht, the Netherlands", "orcid": "0000-0001-7542-0286"}
   ],
   "keywords": [
     "adverse outcome pathway", "AOP-Wiki", "RDF", "SPARQL", "Virtuoso",

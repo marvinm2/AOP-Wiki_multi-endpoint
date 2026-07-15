@@ -10,7 +10,7 @@ authors:
   - family-names: Willighagen
     given-names: Egon L.
     orcid: "https://orcid.org/0000-0001-7542-0286"
-    affiliation: "Department of Bioinformatics (BiGCaT), NUTRIM, Maastricht University"
+    affiliation: "Department of Translational Genomics, Maastricht University"
 url: "https://aopwiki-multirdf.vhp4safety.nl/sparql"
 repository-code: "https://github.com/marvinm2/AOP-Wiki_multi-endpoint"
 license: MIT
