@@ -68,6 +68,9 @@ For questions, bug reports, and feature requests please open a [GitHub Issue](ht
 
 ## Citation
 
-If you use the AOP-Wiki RDF data served by this endpoint, please cite:
+If you use the AOP-Wiki RDF data served by this endpoint, or this pipeline, please cite the paper and the software DOI. See [`CITATION.cff`](CITATION.cff).
 
-Martens M., Evelo C.T., Willighagen E.L. (2022). *Providing Adverse Outcome Pathways from the AOP-Wiki in a Semantic Web Format to Increase Usability and Accessibility of the Content.* Applied In Vitro Toxicology 8(1):2–13. [doi:10.1089/aivt.2021.0010](https://doi.org/10.1089/aivt.2021.0010)
+[![Software DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21384261.svg)](https://doi.org/10.5281/zenodo.21384261)
+
+- Paper: Martens M., Evelo C.T., Willighagen E.L. (2022). *Providing Adverse Outcome Pathways from the AOP-Wiki in a Semantic Web Format to Increase Usability and Accessibility of the Content.* Applied In Vitro Toxicology 8(1):2–13. [doi:10.1089/aivt.2021.0010](https://doi.org/10.1089/aivt.2021.0010)
+- Software (this pipeline, concept DOI): [10.5281/zenodo.21384261](https://doi.org/10.5281/zenodo.21384261)
