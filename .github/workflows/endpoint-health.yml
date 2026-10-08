@@ -36,6 +36,38 @@ jobs:
           fi
           echo "OK"
 
+      - name: Newest graph is current
+        # AOP-Wiki publishes a snapshot on the 1st of Jan/Apr/Jul/Oct. Once a quarter
+        # start is more than LAG_DAYS old, its graph should be loaded.
+        env:
+          LAG_DAYS: '21'
+        run: |
+          set -euo pipefail
+          QUERY='SELECT (MAX(STR(?g)) AS ?g) WHERE { GRAPH ?g { ?a a <http://aopkb.org/aop_ontology#AdverseOutcomePathway> } FILTER(STRSTARTS(STR(?g), "http://aopwiki.org/graph/")) }'
+          newest=$(curl -sS -m 60 --get "$ENDPOINT" --data-urlencode "query=$QUERY" \
+            -H "Accept: application/sparql-results+json" | jq -r '.results.bindings[0].g.value' | sed 's#.*/##')
+          ref=$(date -u -d "-${LAG_DAYS} days" +%Y-%m-%d)
+          y=${ref:0:4}; m=$((10#${ref:5:2}))
+          expected=$(printf '%s-%02d-01' "$y" $(( (m - 1) / 3 * 3 + 1 )))
+          echo "Newest graph: $newest; expected at least: $expected (quarter start older than ${LAG_DAYS} days)"
+          if [[ "$newest" < "$expected" ]]; then
+            echo "::error::Newest graph $newest is behind the $expected quarter"
+            exit 1
+          fi
+
+      - name: Catalogue matches the graphs
+        run: |
+          set -euo pipefail
+          q() { curl -sS -m 60 --get "$ENDPOINT" --data-urlencode "query=$1" \
+            -H "Accept: application/sparql-results+json" | jq -r '.results.bindings[0].v.value // ""'; }
+          graph_max=$(q 'SELECT (MAX(STR(?g)) AS ?v) WHERE { GRAPH ?g { ?a a <http://aopkb.org/aop_ontology#AdverseOutcomePathway> } FILTER(STRSTARTS(STR(?g), "http://aopwiki.org/graph/")) }' | sed 's#.*/##')
+          cat_max=$(q 'SELECT (MAX(STR(?x)) AS ?v) WHERE { GRAPH <http://aopwiki-multirdf.vhp4safety.nl/metadata> { ?d <http://www.w3.org/2002/07/owl#versionInfo> ?x } }')
+          echo "Newest graph: $graph_max; newest catalogue version: $cat_max"
+          if [[ "$graph_max" != "$cat_max" ]]; then
+            echo "::error::Catalogue ($cat_max) does not match the newest graph ($graph_max)"
+            exit 1
+          fi
+
       - name: Open issue on scheduled failure
         if: failure() && github.event_name == 'schedule'
         env:
@@ -43,4 +75,4 @@ jobs:
         run: |
           gh issue create \
             --title "SPARQL endpoint health check failed on $(date -I)" \
-            --body "The multi-version SPARQL endpoint health check failed: graph count below ${MIN_GRAPHS}, or the endpoint was unreachable. Inspect: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --body "The multi-version SPARQL endpoint health check failed: the endpoint was unreachable, the graph count is below ${MIN_GRAPHS}, the newest graph is behind the current quarter, or the version catalogue lags the graphs. Inspect: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
