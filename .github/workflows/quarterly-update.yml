@@ -93,21 +93,19 @@ jobs:
             cat stats.md
             echo ""
             echo "---"
-            echo "## Manual deploy runbook (do NOT merge until reviewed)"
+            echo "## Deploying this quarter"
             echo ""
-            echo "The TTL files are attached to this workflow run as an artifact"
-            echo "(\`aopwikirdf-${NEXT}\`). Loading them onto the live endpoint is a"
-            echo "manual step — this PR only registers the version. After merging:"
+            echo "This PR only registers the version. The TTLs are attached to this run as"
+            echo "artifact \`aopwikirdf-${NEXT}\` (run ${{ github.run_id }}, kept 30 days):"
             echo ""
             echo '```bash'
-            echo "ssh tgx1"
-            echo "cd ~/aopwiki-dashboard            # stack.yml deploys virtuoso + dashboard"
-            echo "# place the new TTLs under the virtuoso data mount, then:"
-            echo "./load.sh --incremental           # loads only the new dated graph"
-            echo "docker service update --force aopwiki-dashboard_virtuoso"
+            echo "gh run download ${{ github.run_id }} -R ${{ github.repository }} -n aopwikirdf-${NEXT}"
             echo '```'
             echo ""
-            echo "See DEPLOY.md for the full procedure and verification queries."
+            echo "Then follow \"Cluster load\" in [DEPLOY.md](${{ github.server_url }}/${{ github.repository }}/blob/master/DEPLOY.md#cluster-load-manual-production): stage all"
+            echo "four files, TTLP them into \`http://aopwiki.org/graph/${NEXT}\`, merge this PR,"
+            echo "regenerate and reload the catalogue, restart the dashboard, and check the"
+            echo "counts above against the new graph. Do not restart Virtuoso or run a full reload."
           } > pr_body.md
 
           gh pr create \
