@@ -2,7 +2,8 @@ name: quarterly-update
 
 # Semi-automated quarterly update. Detects a newly-published AOP-Wiki quarter,
 # converts + validates it, and opens a PR that adds the date to versions.txt with
-# the stats diff and the manual deploy runbook in the body. marvinm2 is requested
+# the stats diff and the deploy runbook (DEPLOY.md, between the runbook
+# markers) in the body. marvinm2 is requested
 # as reviewer, so GitHub's native PR-opened email delivers the runbook.
 #
 # This workflow NEVER touches the live SPARQL endpoint. Loading the new TTLs onto
@@ -96,16 +97,16 @@ jobs:
             echo "## Deploying this quarter"
             echo ""
             echo "This PR only registers the version. The TTLs are attached to this run as"
-            echo "artifact \`aopwikirdf-${NEXT}\` (run ${{ github.run_id }}, kept 30 days):"
+            echo "artifact \`aopwikirdf-${NEXT}\` (run ${{ github.run_id }}, kept 30 days)."
+            echo "After merging, from [DEPLOY.md](${{ github.server_url }}/${{ github.repository }}/blob/master/DEPLOY.md#cluster-load-manual-production):"
             echo ""
-            echo '```bash'
-            echo "gh run download ${{ github.run_id }} -R ${{ github.repository }} -n aopwikirdf-${NEXT}"
-            echo '```'
+            # The runbook section of DEPLOY.md, with this quarter filled in, so
+            # the PR and the runbook cannot drift apart.
+            sed -n '/<!-- runbook:start -->/,/<!-- runbook:end -->/p' DEPLOY.md \
+              | sed '1d;$d' \
+              | sed -e "s/<date>/${NEXT}/g" -e "s/<run-id>/${{ github.run_id }}/g"
             echo ""
-            echo "Then follow \"Cluster load\" in [DEPLOY.md](${{ github.server_url }}/${{ github.repository }}/blob/master/DEPLOY.md#cluster-load-manual-production): stage all"
-            echo "four files, TTLP them into \`http://aopwiki.org/graph/${NEXT}\`, merge this PR,"
-            echo "regenerate and reload the catalogue, restart the dashboard, and check the"
-            echo "counts above against the new graph. Do not restart Virtuoso or run a full reload."
+            echo "Then check the counts printed by the script against the stats table above."
           } > pr_body.md
 
           gh pr create \
