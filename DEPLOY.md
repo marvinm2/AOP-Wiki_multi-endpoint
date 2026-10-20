@@ -18,7 +18,8 @@ data is always a deliberate manual step. CI never writes to it.
 | `generate_all_rdf.py` | Batch convert all versions (`aopwiki-rdf` submodule pipeline) |
 | `validate_rdf.py` | TTL syntax + entity-count gate |
 | `generate_catalog.py` | Emit the DCAT version catalogue + SPARQL service description |
-| `load.sh` | Load TTLs into Virtuoso named graphs (+ catalogue/SD into a metadata graph) |
+| `scripts/add-quarter.sh` | Load one quarter onto production (the cluster) |
+| `load.sh` | Load TTLs into a **local** Virtuoso's named graphs (+ catalogue/SD into a metadata graph) |
 | `.github/workflows/quarterly-update.yml` | Detects a new quarter, opens a PR |
 | `.github/workflows/rdf-validation.yml` | Guards the validator (fixtures) |
 | `.github/workflows/endpoint-health.yml` | Daily live-endpoint health check |
@@ -33,7 +34,8 @@ data is always a deliberate manual step. CI never writes to it.
 2. **Review & merge.** Check the stats diff looks sane (no collapse in entity
    counts), then merge the PR. Merging only records the version — it does **not**
    touch the endpoint.
-3. **Load onto the cluster (manual).** See "Cluster load" below.
+3. **Load onto the cluster (manual):** `scripts/add-quarter.sh <date> --run <run-id>`,
+   see "Cluster load" below.
 
 ### Doing it by hand locally
 
@@ -48,49 +50,50 @@ python add_version.py 2026-07-01 \         # or --detect first
 
 ## Cluster load (manual, production)
 
-This is the one canonical procedure for adding a quarter to production. It is
-incremental: it adds one named graph and never resets the store. The Virtuoso
-runs as swarm service `aopwiki-dashboard_virtuoso` (stack in the dashboard repo)
-and is not node-pinned, so run the `docker cp` steps on whichever node hosts it
-(`docker service ps aopwiki-dashboard_virtuoso`).
+<!-- runbook:start -->
+Loading a quarter onto production is one command, run from the root of a
+checkout of this repo on your own machine after the quarter's PR is merged:
 
-1. **Fetch the TTLs** from the PR's workflow run (artifacts expire after 30 days):
-   ```bash
-   gh run download <run-id> -R marvinm2/AOP-Wiki_multi-endpoint -n aopwikirdf-<date> -D q-<date>
-   scp q-<date>/AOPWikiRDF-*.ttl tgx1:staging/<date>/
-   ```
-2. **Stage all four files** (main, Genes, Enriched, Void) in the data mount. Your
-   user can't write it directly, so copy through the container:
-   ```bash
-   C=$(docker ps -q -f name=aopwiki-dashboard_virtuoso)
-   for f in ~/staging/<date>/AOPWikiRDF-*.ttl; do docker cp "$f" "$C":/database/data/; done
-   ```
-   Keep every quarter's four files there: the full reload in the dashboard repo
-   (`scripts/reload-virtuoso.sh`) rebuilds from this directory.
-3. **Load into the dated graph.** Put one statement per line in a SQL file (isql
-   rejects several statements on one line):
-   ```sql
-   log_enable(2);
-   DB.DBA.TTLP(file_to_string_output('/database/data/AOPWikiRDF-<date>.ttl'), '', 'http://aopwiki.org/graph/<date>');
-   -- …one TTLP per file (Genes, Enriched, Void)…
-   checkpoint;
-   SPARQL SELECT COUNT(*) FROM <http://aopwiki.org/graph/<date>> WHERE {?s ?p ?o};
-   ```
-   Run it with isql from a one-off service that mounts the dba password from the
-   swarm secret `virtuoso_dba_password`; the procedure is in the cluster service
-   doc (`services/aopwiki-dashboard.md`, "Data loading").
-4. **Merge the PR**, then regenerate the version catalogue and service description
-   (`python generate_catalog.py --out <dir>`), stage both files the same way, and
-   reload the metadata graph: `SPARQL CLEAR GRAPH <http://aopwiki-multirdf.vhp4safety.nl/metadata>;`
-   followed by a TTLP of `AOPWikiRDF-Catalog.ttl` and `ServiceDescription.ttl` into it.
-5. **Restart the dashboard** so it picks up the new latest version:
-   `docker service update --force aopwiki-dashboard_dashboard`. Virtuoso itself does
-   not need a restart.
-6. **Verify** (below): the AOP/KE/KER/Stressor counts in the new graph match the
-   PR's stats table, and the catalogue's newest `owl:versionInfo` equals the newest graph.
+```bash
+scripts/add-quarter.sh <date> --run <run-id>
+```
+
+It needs `gh`, the Setup Python requirements (for the catalogue) and `ssh tgx1`.
+It asks before it writes, then:
+
+1. downloads the four TTLs (main, Genes, Enriched, Void) from the workflow
+   artifact `aopwikirdf-<date>` of run `<run-id>` (kept 30 days; without
+   `--run` it takes the newest run that has one, or use `--from DIR`);
+2. regenerates the version catalogue + service description from `versions.txt`;
+3. uploads both to `/mnt/gluster/docker/aopwiki-dashboard/staging/` and does the
+   rest with one-off swarm services, so it does not matter which node runs
+   Virtuoso: copies the TTLs into its `/database/data` (they stay there, the full
+   reload in the dashboard repo rebuilds from that folder), `TTLP`s each into
+   `http://aopwiki.org/graph/<date>`, reloads the metadata graph and checkpoints,
+   with isql and the dba password from the swarm secret `virtuoso_dba_password`;
+4. checks the new graph: AOPs, KEs, KERs and stressors present, and none below
+   90% of the previous quarter;
+5. starts the dashboard's query-store build; the quarter shows up there when it
+   publishes its manifest (about 7 minutes).
+
+It refuses a graph that already has triples (loading twice would duplicate
+blank nodes) unless `--replace`, and it never touches other graphs. Virtuoso and
+the dashboard are not restarted.
+
+`--dry-run` shows the steps and runs only read queries. A test load that leaves
+the live graphs alone goes into a graph outside `http://aopwiki.org/graph/`,
+which also skips the catalogue and the store build:
+
+```bash
+scripts/add-quarter.sh <date> --graph http://aopwiki.org/test-graph/<date> --clear-after
+```
+
+For a quarter that is already live, the test load must match its counts exactly.
+<!-- runbook:end -->
 
 Never run a global reset (`RDF_GLOBAL_RESET`, `./load.sh --full`) against
-production; those are for a host you brought up yourself.
+production; those are for a host you brought up yourself. Rebuilding every graph
+from the staged files is `scripts/reload-virtuoso.sh` in the dashboard repo.
 
 ## Verify after loading
 
@@ -119,7 +122,8 @@ cd Setup
 python setup_versions.py     # download all snapshots in versions.txt
 python generate_all_rdf.py   # convert all → versions/<date>/*.ttl
 docker compose up -d          # local Virtuoso (8890 SPARQL, 1111 isql localhost)
-./load.sh                     # incremental load into dated graphs
+./copy_data_files.sh          # versions/ -> aopwikirdf/ (+ catalogue)
+./load.sh                     # TTLP the quarters whose graph is still empty
 ```
 
 `copy_data_files.sh` regenerates the version catalogue + service description, and

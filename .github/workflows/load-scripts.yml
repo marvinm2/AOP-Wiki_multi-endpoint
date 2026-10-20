@@ -1,0 +1,36 @@
+name: load-scripts
+
+# Guards the load scripts (#22): scripts/add-quarter.sh for production and
+# load.sh for a local Virtuoso. Offline only: nothing is fetched or loaded.
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'load.sh'
+      - 'tests/test_add_quarter.py'
+      - '.github/workflows/load-scripts.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bash syntax
+        run: bash -n scripts/add-quarter.sh && bash -n load.sh
+
+      - name: ShellCheck (errors)
+        run: shellcheck -S error scripts/add-quarter.sh load.sh
+
+      - name: Argument guards
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pytest -q tests/test_add_quarter.py
