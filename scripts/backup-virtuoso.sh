@@ -34,6 +34,8 @@ DIR=$DB/$REL
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# du counts blocks, which the HiDrive cifs mount reports as 512 bytes; use the file size.
+size() { stat -c %s "$1" | numfmt --to=iec; }
 say() { echo "[$(date -u +%H:%M:%S)] $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -83,7 +85,7 @@ mv "$ARCHIVE.part" "$ARCHIVE"
     echo "prefix: $PREFIX"
     echo "graphs: $GRAPHS"
     echo "triples: $TRIPLES"
-    echo "size: $(du -h "$ARCHIVE" | cut -f1)"
+    echo "size: $(size "$ARCHIVE")"
 } > "$OUT/virtuoso-$STAMP.manifest"
 
 # Keep the newest KEEP_REMOTE archives and KEEP_LOCAL backup folders.
@@ -103,4 +105,4 @@ prune "$KEEP_REMOTE" $(ls -1d "$OUT"/virtuoso-*.tar.gz 2>/dev/null | sort)
 # shellcheck disable=SC2046
 prune "$KEEP_LOCAL" $(ls -1d "$DB"/backups/[0-9]*-[0-9]* 2>/dev/null | sort)
 
-say "Done: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1))"
+say "Done: $ARCHIVE ($(size "$ARCHIVE"))"
