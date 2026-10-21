@@ -115,6 +115,47 @@ The `endpoint-health` workflow runs daily and opens an issue if the graph count
 drops below the floor, if the newest graph is more than 21 days behind the most
 recent quarter start, or if the version catalogue lags the graphs.
 
+## Backups
+
+The production database is backed up every night without stopping it
+(dashboard #162). Two swarm cron jobs run the scripts in `scripts/`, in the
+Virtuoso image, on whichever manager is free:
+
+| Job | Schedule (UTC) | Does |
+|---|---|---|
+| `cronjobs_aopwiki-dashboard-backup` | daily 01:30 | `backup-virtuoso.sh`: `backup_online()` of the whole database, packed with `virtuoso.ini` into `/mnt/hidrive/docker/aopwiki-dashboard/virtuoso/virtuoso-<stamp>.tar.gz` (+ `.sha256`, + `.manifest` with the graph and triple counts). Keeps 14 on HiDrive and the last 2 unpacked in `virtuoso-data/backups/`. |
+| `cronjobs_aopwiki-dashboard-backup-verify` | Sundays 02:30 | `verify-virtuoso-backup.sh`: restores the newest archive into a throwaway Virtuoso inside the job's own container and fails unless every graph comes back with its manifest count. |
+
+A backup is about 21 MB and takes a few seconds. The scripts are mounted from
+`/mnt/gluster/docker/aopwiki-dashboard/jobs/`; after changing one here, copy it
+there:
+
+```bash
+scp scripts/backup-virtuoso.sh scripts/verify-virtuoso-backup.sh \
+    tgx1:/mnt/gluster/docker/aopwiki-dashboard/jobs/
+```
+
+Run either job now with
+`docker service update --detach --force --replicas 1 cronjobs_aopwiki-dashboard-backup`
+and read the result with `docker service logs --raw <job>`.
+
+**Restoring production** (the database is lost or corrupt):
+
+1. Stop Virtuoso cleanly: `docker service scale aopwiki-dashboard_virtuoso=0`
+   (its stop grace period is 300 s; an interrupted checkpoint is what corrupted
+   it in October 2026).
+2. In a one-off root container with `virtuoso-data` mounted at `/database`, move
+   `virtuoso.db`, `virtuoso.trx` and `virtuoso-temp.db` into a `corrupt-<date>/`
+   folder (keep them), unpack the chosen archive into `/database/restore/`, copy
+   its `aopwiki-*.bp` into `/database`, and run
+   `cd /database && /opt/virtuoso-opensource/bin/virtuoso-t +configfile virtuoso.ini +restore-backup aopwiki-`.
+   Then remove the copied `.bp` files.
+3. `docker service scale aopwiki-dashboard_virtuoso=1`, and compare the graph
+   counts with the archive's `graphs.txt`.
+4. A quarter loaded after that backup is missing: load it again with
+   `scripts/add-quarter.sh`. Then restart the dashboard so it re-reads the
+   versions, and run the query-store build.
+
 ## Local development
 
 ```bash
