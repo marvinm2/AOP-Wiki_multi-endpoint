@@ -1,7 +1,8 @@
 name: load-scripts
 
 # Guards the load scripts (#22): scripts/add-quarter.sh for production and
-# load.sh for a local Virtuoso. Offline only: nothing is fetched or loaded.
+# load.sh for a local Virtuoso, plus the backup scripts (dashboard #162).
+# Offline only: nothing is fetched, loaded or backed up.
 
 on:
   pull_request:
@@ -25,10 +26,14 @@ jobs:
           python-version: '3.11'
 
       - name: Bash syntax
-        run: bash -n scripts/add-quarter.sh && bash -n load.sh
+        run: |
+          bash -n scripts/add-quarter.sh && bash -n load.sh
+          sh -n scripts/backup-virtuoso.sh && sh -n scripts/verify-virtuoso-backup.sh
 
       - name: ShellCheck (errors)
-        run: shellcheck -S error scripts/add-quarter.sh load.sh
+        run: |
+          shellcheck -S error scripts/add-quarter.sh load.sh
+          shellcheck -S warning scripts/backup-virtuoso.sh scripts/verify-virtuoso-backup.sh
 
       - name: Argument guards
         run: |
